@@ -43,14 +43,15 @@ SERIAL_PORT_OVERRIDE=$(cfg_get serial_port "")
 
 # ---------------------------------------------------------------------------
 # Auto-setup: ensure statusline caches context/model/branch for CodaTV
+# Runs in subshell so failures never abort the main script
 # ---------------------------------------------------------------------------
-STATUSLINE_FILE="$HOME/.claude/statusline.sh"
-CODATV_MARKER="# codatv-cache"
+(
+  STATUSLINE_FILE="$HOME/.claude/statusline.sh"
+  CODATV_MARKER="# codatv-cache"
 
-if [[ ! -f "$STATUSLINE_FILE" ]]; then
-  # No statusline script — create one
-  mkdir -p "$HOME/.claude" 2>/dev/null
-  cat > "$STATUSLINE_FILE" << 'STATUSEOF'
+  if [[ ! -f "$STATUSLINE_FILE" ]]; then
+    mkdir -p "$HOME/.claude" 2>/dev/null
+    cat > "$STATUSLINE_FILE" << 'STATUSEOF'
 #!/bin/bash
 input=$(cat)
 # codatv-cache
@@ -64,10 +65,9 @@ if [ -n "$_SID" ]; then
   printf '{"pct":%s,"model":"%s","branch":"%s"}' "$_PCT" "$_MDL" "$_BR" > "/tmp/codatv-ctx/$_SID" 2>/dev/null
 fi
 STATUSEOF
-  chmod +x "$STATUSLINE_FILE" 2>/dev/null
-elif ! grep -q "$CODATV_MARKER" "$STATUSLINE_FILE" 2>/dev/null; then
-  # Statusline exists but doesn't have CodaTV integration — append it
-  cat >> "$STATUSLINE_FILE" << 'APPENDEOF'
+    chmod +x "$STATUSLINE_FILE" 2>/dev/null
+  elif ! grep -q "$CODATV_MARKER" "$STATUSLINE_FILE" 2>/dev/null; then
+    cat >> "$STATUSLINE_FILE" << 'APPENDEOF'
 
 # codatv-cache
 _SID=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null)
@@ -80,18 +80,20 @@ if [ -n "$_SID" ]; then
   printf '{"pct":%s,"model":"%s","branch":"%s"}' "$_PCT" "$_MDL" "$_BR" > "/tmp/codatv-ctx/$_SID" 2>/dev/null
 fi
 APPENDEOF
-fi
+  fi
 
-# Ensure settings.json points to the statusline script
-SETTINGS_FILE="$HOME/.claude/settings.json"
-if [[ -f "$SETTINGS_FILE" ]] && ! jq -e '.statusLine' "$SETTINGS_FILE" &>/dev/null; then
-  # No statusLine configured — add it
-  jq '.statusLine = {"type": "command", "command": "~/.claude/statusline.sh"}' "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" 2>/dev/null && \
-    mv "${SETTINGS_FILE}.tmp" "$SETTINGS_FILE" 2>/dev/null || true
-elif [[ ! -f "$SETTINGS_FILE" ]]; then
-  mkdir -p "$HOME/.claude" 2>/dev/null
-  echo '{"statusLine":{"type":"command","command":"~/.claude/statusline.sh"}}' > "$SETTINGS_FILE" 2>/dev/null || true
-fi
+  # Ensure settings.json has statusLine configured
+  SETTINGS_FILE="$HOME/.claude/settings.json"
+  if [[ -f "$SETTINGS_FILE" ]]; then
+    if ! jq -e '.statusLine' "$SETTINGS_FILE" &>/dev/null; then
+      jq '.statusLine = {"type": "command", "command": "~/.claude/statusline.sh"}' "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" 2>/dev/null && \
+        mv "${SETTINGS_FILE}.tmp" "$SETTINGS_FILE" 2>/dev/null
+    fi
+  else
+    mkdir -p "$HOME/.claude" 2>/dev/null
+    echo '{"statusLine":{"type":"command","command":"~/.claude/statusline.sh"}}' > "$SETTINGS_FILE" 2>/dev/null
+  fi
+) 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # Detect serial port
