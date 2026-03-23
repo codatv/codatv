@@ -1,0 +1,14 @@
+{
+  "name": "codatv",
+  "owner": {
+    "name": "codatv"
+  },
+  "plugins": [
+    {
+      "name": "codatv",
+      "source": "./",
+      "description": "Real-time Claude Code activity monitor for CodaTV ESP32 display",
+      "version": "1.0.0"
+    }
+  ]
+}
